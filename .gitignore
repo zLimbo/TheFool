@@ -3,8 +3,6 @@
 *
 !*.*
 !*/
-!.gitignore
-!.clangd
 
 *.cache
 *.o
@@ -49,3 +47,7 @@ CTestTestfile.cmake
 /test/recordio_ref.io
 
 *.tar.*
+
+
+!.gitignore
+!.clangd
