@@ -1,5 +1,9 @@
-#include <range/v3/all.hpp>
+#include <fmt/format.h>
 
-int main() {
+auto main() -> int {
+    int a = 1 + 1;
+
+    fmt::println("a: {}", a);
+
     return 0;
 }

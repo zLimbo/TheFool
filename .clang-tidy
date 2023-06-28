@@ -1,10 +1,17 @@
 Checks: '
--*,
-clang-diagnostic-*,
+-*
+bugprone-*,
+clang-analyzer-*,
+concurrency-*,
+cppcoreguidelines-*,
+google-*,
+hicpp-*,
+linuxkernel-*,
 llvm-*,
 misc-*,
--misc-unused-parameters,
--misc-non-private-member-variables-in-classes,
--readability-identifier-naming,
-cppcoreguidelines-*
+modernize-*,
+performance-*,
+portability-*,
+readability-*,
+
 '

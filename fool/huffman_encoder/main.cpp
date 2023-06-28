@@ -3,11 +3,9 @@
 
 #include "huffman_encoder.h"
 
-using namespace std;
-
-int main(int argc, char** argv) {
+auto main(int argc, char* argv[]) -> int {
     assert(argc >= 1);
-    string filename = argv[1];  // 读取输入（也可在界面中拖动）
+    std::string filename = argv[1];  // 读取输入（也可在界面中拖动）
     zfish::HuffmanEncoder hec{filename};
     hec.run();
     getchar();

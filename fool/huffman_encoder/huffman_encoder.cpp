@@ -1,14 +1,17 @@
 #include "huffman_encoder.h"
 
+#include <bits/types/FILE.h>
+
+#include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <exception>
+#include <memory>
 #include <queue>
 
-using namespace std;
+namespace zfish {
 
-using namespace zfish;
-
-HuffmanEncoder::HuffmanEncoder(const string& input_filename, bool is_compressed)
+HuffmanEncoder::HuffmanEncoder(const std::string& input_filename, bool is_compressed)
     : root_(nullptr),
       is_compressed_(is_compressed),
       input_filename_(input_filename),
@@ -16,13 +19,13 @@ HuffmanEncoder::HuffmanEncoder(const string& input_filename, bool is_compressed)
       input_filesize_(0),
       output_filesize_(0) {
     for (int i = 0; i < kCodeNum; ++i) {
-        points_[i].old_code = i;
+        points_.at(i).old_code = i;
     }
 }
 
 // 释放节点及其子树
 void HuffmanEncoder::freeNode(HuffmanTreeNode* node) {
-    if (node) {
+    if (node != nullptr) {
         freeNode(node->left);
         freeNode(node->right);
         delete node;
@@ -39,13 +42,13 @@ void HuffmanEncoder::run() {
     FILE* input_fp = nullptr;
     if ((input_fp = fopen(input_filename_.c_str(), "rb")) == nullptr) {
         printf("open file %s failed!\n", input_filename_.c_str());
-        exit(-1);
+        std::terminate();
     }
 
-    char zip_name[kLenOfZipName];
-    fread(zip_name, kLenOfZipName, 1, input_fp);
+    std::array<char, kLenOfZipName> zip_name{};
+    fread(zip_name.data(), kLenOfZipName, 1, input_fp);
 
-    if (is_compressed_ || strcmp(zip_name, kZipName)) {
+    if (is_compressed_ || std::string_view{zip_name.data()} == kZipName) {
         // 无识别符，非压缩文件
         fclose(input_fp);
         printf("开始压缩文件%s......\n", input_filename_.c_str());
@@ -54,7 +57,7 @@ void HuffmanEncoder::run() {
         printf("正在构建哈夫曼树......\n");
         root_ = buildHuffmanTree();
         printf("正在产生新编码......\n");
-        initCodePoint(root_, 0, string(), 0);
+        initCodePoint(root_, 0, std::string(), 0);
         printHuffmanEncodeInfo();
         printf("正在压缩......\n");
         compress();  // 压缩
@@ -69,19 +72,19 @@ void HuffmanEncoder::run() {
         // 读入原文件名
         fread(output_filename, kLenOfFileName, 1, input_fp);
         printf("原始文件名为%s\n", output_filename);
-        output_filename_ = string(output_filename);
+        output_filename_ = std::string(output_filename);
         // 读入原文件大小
         fread(&output_filesize_, kLenOfFileSize, 1, input_fp);
         // 读入字符频率表
         for (int i = 0; i < kCodeNum; ++i) {
-            fread(&points_[i].frequency, kLenOfCodeFrequency, 1, input_fp);
+            fread(&points_.at(i).frequency, kLenOfCodeFrequency, 1, input_fp);
         }
 
         fclose(input_fp);
         printf("正在构建哈夫曼树......\n");
         root_ = buildHuffmanTree();
         printf("正在产生新编码......\n");
-        initCodePoint(root_, 0, string(), 0);
+        initCodePoint(root_, 0, std::string(), 0);
         printHuffmanEncodeInfo();
         printf("正在解压缩......\n");
         uncompress();  // 解压缩
@@ -96,11 +99,11 @@ void HuffmanEncoder::statisticalFrequency() {
     FILE* input_fp = nullptr;
     if ((input_fp = fopen(input_filename_.c_str(), "rb")) == nullptr) {
         printf("open file %s failed!\n", input_filename_.c_str());
-        exit(-1);
+        std::terminate();
     }
     // 统计频率
     while (!feof(input_fp)) {
-        Byte input_byte;
+        Byte input_byte = 0;
         fread(&input_byte, 1, 1, input_fp);
         if (feof(input_fp)) {
             break;
@@ -112,12 +115,13 @@ void HuffmanEncoder::statisticalFrequency() {
 }
 
 // 构建 Huffman 树
-HuffmanTreeNode* HuffmanEncoder::buildHuffmanTree() {
+auto HuffmanEncoder::buildHuffmanTree() -> HuffmanTreeNode* {
     // 使用优先队列，自定义比较器
-    priority_queue<HuffmanTreeNode*, vector<HuffmanTreeNode*>, CmparatorOfHuffmanTreeNode> pq;
+    std::priority_queue<HuffmanTreeNode*, std::vector<HuffmanTreeNode*>, CmparatorOfHuffmanTreeNode>
+        pq;
     // 初始化叶子节点
     for (int i = 0; i < kCodeNum; ++i) {
-        pq.push(new HuffmanTreeNode(points_[i].frequency, &points_[i]));
+        pq.push(new HuffmanTreeNode(points_.at(i).frequency, &points_.at(i)));
     }
     // 取最小两个节点合并
     while (true) {
@@ -125,8 +129,7 @@ HuffmanTreeNode* HuffmanEncoder::buildHuffmanTree() {
         pq.pop();
         HuffmanTreeNode* node2 = pq.top();
         pq.pop();
-        HuffmanTreeNode* node3 =
-            new HuffmanTreeNode(node1->weight + node2->weight, nullptr, node1, node2);
+        auto* node3 = new HuffmanTreeNode(node1->weight + node2->weight, nullptr, node1, node2);
         // 优先队列为空则成功构建 Huffman 树，返回
         if (pq.empty()) {
             return node3;
@@ -136,50 +139,51 @@ HuffmanTreeNode* HuffmanEncoder::buildHuffmanTree() {
 }
 
 // 获得 Huffman 编码
-void HuffmanEncoder::initCodePoint(HuffmanTreeNode* node, CodeType new_code, string new_code_str,
-                                   int length) {
+void HuffmanEncoder::initCodePoint(HuffmanTreeNode* node, CodeType new_code,
+                                   const std::string& new_code_str, int length) {
     // 是叶子节点则结束，记录编码
-    if (node->point) {
+    if (node->point != nullptr) {
         node->point->new_code = new_code;
         node->point->new_code_str = new_code_str;
         node->point->length = length;
         return;
     }
     // 否则向左右分支探索
-    new_code <<= 1;
+    new_code <<= 1U;
     ++length;
-    if (node->left) {
+    if (node->left != nullptr) {
         initCodePoint(node->left, new_code, new_code_str + "0", length);
     }
-    if (node->right) {
+    if (node->right != nullptr) {
         initCodePoint(node->right, new_code + 1, new_code_str + "1", length);
     }
 }
 
 // 压缩文件
 void HuffmanEncoder::compress() {
-    FILE* input_fp = nullptr;
-    if ((input_fp = fopen(input_filename_.c_str(), "rb")) == nullptr) {
-        printf("open file %s failed!\n", input_filename_.c_str());
-        exit(-1);
-    }
+    auto free_file = [](FILE* file) { fclose(file); };
+    std::unique_ptr<FILE, decltype(free_file)> input_fp{fopen(input_filename_.c_str(), "rb")};
+    std::unique_ptr<FILE, decltype(free_file)> output_fp{fopen(output_filename_.c_str(), "wb")};
 
-    FILE* output_fp = nullptr;
-    if ((output_fp = fopen(output_filename_.c_str(), "wb")) == nullptr) {
+    if (input_fp == nullptr) {
+        printf("open file %s failed!\n", input_filename_.c_str());
+        std::terminate();
+    }
+    if (output_fp == nullptr) {
         printf("open file %s failed!\n", output_filename_.c_str());
-        exit(-1);
+        std::terminate();
     }
 
     // 写入压缩文件头信息
     // 识别符
-    fwrite(kZipName, kLenOfZipName, 1, output_fp);
+    fwrite(kZipName.data(), kLenOfZipName, 1, output_fp.get());
     // 文件名
-    fwrite(input_filename_.c_str(), kLenOfFileName, 1, output_fp);
+    fwrite(input_filename_.c_str(), kLenOfFileName, 1, output_fp.get());
     // 文件大小
-    fwrite(&input_filesize_, kLenOfFileSize, 1, output_fp);
+    fwrite(&input_filesize_, kLenOfFileSize, 1, output_fp.get());
     // 字符频率，用以构建Huffman树
     for (int i = 0; i < kCodeNum; ++i) {
-        fwrite(&points_[i].frequency, kLenOfCodeFrequency, 1, output_fp);
+        fwrite(&points_.at(i).frequency, kLenOfCodeFrequency, 1, output_fp.get());
     }
 
     // 压缩所需临时辅助变量
@@ -192,11 +196,11 @@ void HuffmanEncoder::compress() {
     CodeType cur_output_size = 0;
     double cur_rate = 0.0;
 
-    while (!feof(input_fp)) {
+    while (feof(input_fp.get()) == 0) {
         // FIXME: 每次只读一个字节，可优化
-        fread(&input_byte, 1, 1, input_fp);
+        fread(&input_byte, 1, 1, input_fp.get());
         // 读到文件尾，结束
-        if (feof(input_fp)) {
+        if (feof(input_fp.get()) != 0) {
             break;
         }
 
@@ -222,15 +226,15 @@ void HuffmanEncoder::compress() {
         // +-----------------+------------+----|------------+
         // |   outByte(1)    | outByte(2) | …… |  ……        |
         // +-----------------+------------+----+------------+
-        while (length--) {
+        while ((length--) != 0) {
             // 左移一位，最低位为新的可使用bit, 并将该bit置位 new_code
             // 需要写入的 bit
-            output_byte <<= 1;
-            output_byte += (new_code >> length) & 1;
+            output_byte <<= 1U;
+            output_byte += (new_code >> static_cast<unsigned>(length)) & 1U;
             // 如果当前 output_byte 的 8bit 都已用完，写入文件，重新复用
             // FIXME: 1byte复用效率太低，也无缓存机制，可优化
             if (++cnt == 8) {
-                fwrite(&output_byte, 1, 1, output_fp);
+                fwrite(&output_byte, 1, 1, output_fp.get());
                 output_byte = 0;
                 cnt = 0;
                 ++output_filesize_;
@@ -240,38 +244,34 @@ void HuffmanEncoder::compress() {
 
     // 最后一个不足8比特填充 0
     if (cnt < 8) {
-        output_byte <<= 8 - cnt;
-        fwrite(&output_byte, 1, 1, output_fp);
+        assert(8 - cnt >= 0);
+        output_byte <<= static_cast<unsigned>(8 - cnt);
+        fwrite(&output_byte, 1, 1, output_fp.get());
         ++output_filesize_;
     }
 
     //  打印压缩信息
     printf("已压缩: %.1f%%\t压缩率: %.2f%%\n", 100.0,
-           (double)output_filesize_ / cur_input_size * 100);
-
-    // 关闭文件
-    fclose(input_fp);
-    fclose(output_fp);
+           static_cast<double>(output_filesize_) / cur_input_size * 100);
 }
 
 // 搜索节点，辅助于解码
-bool HuffmanEncoder::findNode(HuffmanTreeNode*& node, Byte input_byte, int& pos) {
+auto HuffmanEncoder::findNode(HuffmanTreeNode*& node, Byte input_byte, int& pos) -> bool {
     // 叶子节点搜索成功
-    if (node->point) {
+    if (node->point != nullptr) {
         return true;
     }
     if (pos < 0) {
         return false;
     }
-    int val = (input_byte >> pos) & 1;
+    int val = (input_byte >> static_cast<unsigned>(pos)) & 1U;
     --pos;
     if (val == 0) {
         node = node->left;
         return findNode(node, input_byte, pos);
-    } else {
-        node = node->right;
-        return findNode(node, input_byte, pos);
     }
+    node = node->right;
+    return findNode(node, input_byte, pos);
 }
 
 // 解压缩
@@ -279,29 +279,29 @@ void HuffmanEncoder::uncompress() {
     FILE* input_fp = nullptr;
     if ((input_fp = fopen(input_filename_.c_str(), "rb")) == nullptr) {
         printf("open file %s failed!\n", input_filename_.c_str());
-        exit(-1);
+        std::terminate();
     }
 
     FILE* output_fp = nullptr;
     if ((output_fp = fopen(output_filename_.c_str(), "wb")) == nullptr) {
         printf("open file %s failed!\n", output_filename_.c_str());
-        exit(-1);
+        std::terminate();
     }
 
     fseek(input_fp, kLenOfZipHeader, SEEK_SET);
     input_filesize_ = kLenOfZipHeader;
 
     // 解压缩所需临时变量
-    Byte input_byte;
-    Byte output_byte;
+    Byte input_byte = 0;
+    Byte output_byte = 0;
     HuffmanTreeNode* node = root_;
     CodeType cur_output_size = 0;
-    int pos;
+    int pos = 0;
     double currRate = 0.0;
 
-    while (!feof(input_fp)) {
+    while (feof(input_fp) == 0) {
         fread(&input_byte, 1, 1, input_fp);
-        if (feof(input_fp)) {
+        if (feof(input_fp) != 0) {
             break;
         }
         ++input_filesize_;
@@ -313,17 +313,17 @@ void HuffmanEncoder::uncompress() {
             fwrite(&output_byte, 1, 1, output_fp);
 
             // 记录速率
-            double rate = (double)(++cur_output_size) / output_filesize_ * 100;
+            double rate = static_cast<double>(++cur_output_size) / output_filesize_ * 100;
             if (rate - currRate >= 10) {
                 currRate = rate;
                 //	system("cls");
                 printf("已解压缩：%.1f%%\t解压缩率：%.2f%%\n", currRate,
-                       (double)cur_output_size / input_filesize_ * 100);
+                       static_cast<double>(cur_output_size) / input_filesize_ * 100);
             }
 
             if (cur_output_size == output_filesize_) {
                 printf("已解压缩：%.1f%%\t解压缩率：%.2f%%\n", 100.0,
-                       (double)cur_output_size / input_filesize_ * 100);
+                       static_cast<double>(cur_output_size) / input_filesize_ * 100);
                 break;
             }
 
@@ -339,18 +339,18 @@ void HuffmanEncoder::printHuffmanEncodeInfo() {
     printf("%-10s %-10s %-20s %-5s %-10s\n", "原码", "频率", "哈夫曼编码", "长度", "十进制");
 
     for (int i = 0; i < kCodeNum; ++i) {
-        HuffmanCodePoint& code = points_[i];
-        printf("%-10d %-10llu %-20s %-5d %-10llu\n", (int)code.old_code, code.frequency,
+        HuffmanCodePoint& code = points_.at(i);
+        printf("%-10d %-10lu %-20s %-5d %-10lu\n", static_cast<int>(code.old_code), code.frequency,
                code.new_code_str.c_str(), code.length, code.new_code);
     }
 }
 
 // 打印压缩或解压缩信息
-void HuffmanEncoder::printInfo(const char* type) {
-    double compress_rate = (double)output_filesize_ / input_filesize_ * 100;
+void HuffmanEncoder::printInfo(const char* type) const {
+    double compress_rate = static_cast<double>(output_filesize_) / input_filesize_ * 100;
     printf("%s率: %.2f%%\n", type, compress_rate);
-    double input_filesize = static_cast<double>(input_filesize_);
-    double output_filesize = static_cast<double>(output_filesize_);
+    auto input_filesize = static_cast<double>(input_filesize_);
+    auto output_filesize = static_cast<double>(output_filesize_);
     if (input_filesize < 1024) {
         printf("输入文件大小：%.2fB, 输出文件大小：%.2fB\n", input_filesize, output_filesize);
         return;
@@ -379,21 +379,22 @@ void HuffmanEncoder::printInfo(const char* type) {
 }
 
 // 判断两个文件是否相等
-bool HuffmanEncoder::equalFile(const string& filename1, const string& filename2) {
+auto HuffmanEncoder::equalFile(const std::string& filename1, const std::string& filename2) -> bool {
     FILE* fp1 = nullptr;
     if ((fp1 = fopen(filename1.c_str(), "rb")) == nullptr) {
         printf("open file %s failed!\n", filename1.c_str());
-        exit(-1);
+        std::terminate();
     }
 
     FILE* fp2 = nullptr;
     if ((fp2 = fopen(filename2.c_str(), "rb")) == nullptr) {
         printf("open file %s failed!\n", filename2.c_str());
-        exit(-1);
+        std::terminate();
     }
 
-    while (!feof(fp1) && !feof(fp2)) {
-        Byte uch1, uch2;
+    while ((feof(fp1) == 0) && (feof(fp2) == 0)) {
+        Byte uch1 = 0;
+        Byte uch2 = 0;
 
         fread(&uch1, 1, 1, fp1);
         fread(&uch2, 1, 1, fp2);
@@ -403,9 +404,7 @@ bool HuffmanEncoder::equalFile(const string& filename1, const string& filename2)
         }
     }
 
-    if (!feof(fp1) || !feof(fp2)) {
-        return false;
-    }
-
-    return true;
+    return (feof(fp1) != 0) && (feof(fp2) != 0);
 }
+
+}  // namespace zfish
