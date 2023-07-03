@@ -48,6 +48,8 @@ CTestTestfile.cmake
 
 *.tar.*
 
+target/
+
 !.gitignore
 !.clangd
 !.clang-format
