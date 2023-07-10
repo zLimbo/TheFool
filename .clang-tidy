@@ -14,4 +14,6 @@ performance-*,
 portability-*,
 readability-*,
 
+-modernize-use-trailing-return-type,
+-readability-identifier-length
 '
