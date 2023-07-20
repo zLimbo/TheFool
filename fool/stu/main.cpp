@@ -1,6 +1,13 @@
-#include <fmt/format.h>
+// #include <fmt/format.h>
 
-auto main() -> int {
-    
+int f(int x, int y)
+{
+    return y;
+}
+
+int main()
+{
+    int z = f(10, 20);
+
     return 0;
 }
